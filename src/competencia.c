@@ -21,10 +21,17 @@ struct lista * abrir_archivo(char * ruta){
     int i= 0;
     archivo = fopen(ruta, "r");
     int largo_lista = 0, numero = 0, n_listas = 0;
+    lista * retorno/* = (lista *) malloc(sizeof(struct lista))*/; //espacio para una lista
     if(archivo){
         cursor = getc(archivo);
         while(cursor != EOF){
             n_listas++;
+            if(n_listas == 1){
+                retorno = (lista *) malloc(sizeof(struct lista));
+            }else{
+                retorno = (lista *) realloc(retorno, sizeof(struct lista) * (n_listas));
+            }
+
             //Codigo para archivo valido
             buffer = (char *) malloc(sizeof(char));
 
@@ -40,13 +47,14 @@ struct lista * abrir_archivo(char * ruta){
             }
             //Una vez sacado el primer término, este se convierte a un entero
             largo_lista = atoi(buffer);
-            printf("- Largo lista %d: %d\n", n_listas, largo_lista);
+            //printf("buffer: (%s)", buffer);
+            //printf("- Largo lista %d: %d\n", n_listas, largo_lista);
             /*
             Obtenido el largo de la lista, los siguientes valores son numeros de
             la lista
             */
             cursor = getc(archivo);
-            lista list = crear_lista(largo_lista);
+            lista * list = crear_lista(largo_lista);
             while(cursor != '\n'){
                 i = 0;
                 free(buffer);
@@ -65,21 +73,42 @@ struct lista * abrir_archivo(char * ruta){
 
                 // Luego de que se tiene un numero, se pasa a int y se agrega a la lista
                 int num = atoi(buffer);
-                printf("- Elemento de la lista: %d\n", num);
-                add_lista(&list, num);
+                //printf("- Elemento de la lista: %d\n", num);
+                add_lista(list, num);
                 // se itera para todos los numeros.
 
                 if(cursor == '\n'){
-                    cursor = getc(archivo);
+                    //printf("Salto de linea\n");
+                    //cursor = getc(archivo);
                     break;
                 }
+                //printf("Esto no debe aparecer luego de un salto de linea\n");
                 cursor = getc(archivo);
             }
-            
+            /*
+            printf("asfdf\n");
+            int k = 0;
+            for (k = 0; k < list->largo; k++) {
+                printf("%d  ", (list->dato)[k]);
+            }
+            printf("\n");
+            */
+            cursor = getc(archivo);
+            retorno[n_listas-1].dato = list->dato;
+            retorno[n_listas-1].largo = list->largo;
+            retorno[n_listas-1].cursor = list->cursor;
         }
     }
-
-    return 0;
+    /*
+    i = 0;
+    int j = 0;
+    for(i = 0; i < 3; i++){
+        printf("Lista %d \n", i);
+        for (j = 0; i < (retorno[i].largo); j++) {
+            printf("Elemento de lista: %d\n", (retorno[i].dato)[j]);
+        }
+    }*/
+    return retorno;
 }
 
 int main(int argc, char * argv[]){
@@ -110,5 +139,20 @@ int main(int argc, char * argv[]){
 
     lista * listas = abrir_archivo(ruta);
 
+    /*
+    //Debería ser capaz de imprimirlas:
+
+    int i = 0, j = 0;
+    for(i = 0; i < 3; i++){
+        printf("Lista %d \n", i);
+        lista l = listas[i];
+        printf("Largo lista: %d\n", l.largo);
+        for (j = 0; j < l.largo; j++) {
+            printf("%d  ", l.dato[j]);
+        }
+        printf("\n");
+    }
+    */
+    
     return 0;
 }

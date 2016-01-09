@@ -6,17 +6,17 @@ typedef struct lista{
   int cursor;
 }lista;
 
-lista crear_lista(int largo){
+lista * crear_lista(int largo){
     int * li = ( int * ) malloc(sizeof( int ) * largo);
-    lista l;
-    l.dato = li;
-    l.largo = largo;
-    l.cursor = 0;
+    lista * l = (lista * ) malloc(sizeof (struct lista));;
+    l->dato = li;
+    l->largo = largo;
+    l->cursor = 0;
     return l;
 }
 
 void add_lista(lista * l, int num){
     (l->dato)[l->cursor] = num;
-    l->cursor = (l->cursor)++;
+    l->cursor = (l->cursor) + 1;
     return;
 }
