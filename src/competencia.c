@@ -190,16 +190,17 @@ void *hebra(void * context){
             */
             pthread_mutex_lock(mutex_interseccion);
                 //agregar
-                if((interseccion -> largo) == 1){
+                //if((interseccion -> largo) == 1){
+
                     //Se agrega el primer elemento.
                     //(interseccion -> dato)[0] = elemento_s;
                     add_lista(interseccion, elemento_s);
-                }else{
+                /*}else{
                     // Se debe agrandar la lista.
                     printf("Agrandar------------------\n");
                     agrandar_lista(interseccion, (interseccion->largo)+1);
                     add_lista(interseccion, elemento_s);
-                }
+                }*/
             pthread_mutex_unlock(mutex_interseccion);
         }
 
@@ -230,76 +231,96 @@ void *equipo(){
             indice_corto = i;
         }
     }
-    //printf("1\n");
-    //printf("Indice Corto: %d\n", indice_corto);
-    //Conociendo la lista mas corta, se puede comenzar a intersectar.
-    /*
-    A cada hebra se le debe entregar un subconjunto de la siguiente lista a revisar
-    K, es decir se le entregará k, que es una sublista de K (k e K).
-    Además, cada hebra debe tener acceso a la lista más corta, y solo debe
-    bloquearla cada vez que va a a leer un elemento para proveer concurrencia.
-    */
-    // Luego de que cada equipo ha leido el archivo de texto, se puede competir:
-    // Cada equipo debe inicializar a sus hebras participantes:
-    pthread_t *hebras = ( pthread_t * ) malloc ( sizeof( pthread_t ) * n_hebras );
+    int listas_count = 0;
 
-    //Se inicializan los semaforos para cada elemento de la lista más corta:
-    //Un semaforo por elemento (se bloquea la lista de a un elemento)
-    pthread_mutex_t * mutex_s = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) * listas[indice_corto].largo);
-    int lista_actual = 0;
-    int hebra_count;
-    int inicio_subconjunto = 0;
-    int tamano_subconjunto = listas[lista_actual].largo / n_hebras;
-    int indice_relativo = 0;
-    struct parametrosHebra ph[n_hebras];
+    while(listas_count < n_listas){
+        if(listas_count != indice_corto){
+            printf("Lista corta: largo: %d, cursor: %d\n", listas[indice_corto].largo , listas[indice_corto].cursor);
+            for(i = 0; i < listas[indice_corto].largo ; i++){
+                printf("%d ", (listas[indice_corto].dato)[i]);
+            }
+            printf("\n");
 
-    printf("2\n");
-    // Intersección es S'
-    lista * interseccion = crear_lista(1);
+            //printf("1\n");
+            //printf("Indice Corto: %d\n", indice_corto);
+            //Conociendo la lista mas corta, se puede comenzar a intersectar.
+            /*
+            A cada hebra se le debe entregar un subconjunto de la siguiente lista a revisar
+            K, es decir se le entregará k, que es una sublista de K (k e K).
+            Además, cada hebra debe tener acceso a la lista más corta, y solo debe
+            bloquearla cada vez que va a a leer un elemento para proveer concurrencia.
+            */
+            // Luego de que cada equipo ha leido el archivo de texto, se puede competir:
+            // Cada equipo debe inicializar a sus hebras participantes:
+            pthread_t *hebras = ( pthread_t * ) malloc ( sizeof( pthread_t ) * n_hebras );
 
-    // Se inicializan los semaforos
-    // hay problemas aqui
-    // Se crea mutex para proteger la lista de intersección S' contra escritura
-    pthread_mutex_t * mutex_interseccion = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) );
-    //* mutex_interseccion = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_init(mutex_interseccion, NULL);
-    int semaforos = 0;
-    for (semaforos = 0; semaforos < listas[indice_corto].largo; semaforos++) {
-        //mutex_s[semaforos] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-        //Se inicializan los semaforos para proteger cada elemento de S
-        //Nunca se necesitarán más que la cantidad inicial.
-        pthread_mutex_init(&(mutex_s[semaforos]), NULL);
+            //Se inicializan los semaforos para cada elemento de la lista más corta:
+            //Un semaforo por elemento (se bloquea la lista de a un elemento)
+            pthread_mutex_t * mutex_s = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) * listas[indice_corto].largo);
+
+            int indice_relativo = listas_count;
+            int hebra_count;
+            int inicio_subconjunto = 0;
+            int tamano_subconjunto = listas[indice_relativo].largo / n_hebras;
+            struct parametrosHebra ph[n_hebras];
+
+            // Intersección es S'
+            lista * interseccion = crear_lista(1);
+
+            // Se inicializan los semaforos
+            // hay problemas aqui
+            // Se crea mutex para proteger la lista de intersección S' contra escritura
+            pthread_mutex_t * mutex_interseccion = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) );
+            //* mutex_interseccion = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+            pthread_mutex_init(mutex_interseccion, NULL);
+            int semaforos = 0;
+            for (semaforos = 0; semaforos < listas[indice_corto].largo; semaforos++) {
+                //mutex_s[semaforos] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+                //Se inicializan los semaforos para proteger cada elemento de S
+                //Nunca se necesitarán más que la cantidad inicial.
+                pthread_mutex_init(&(mutex_s[semaforos]), NULL);
+            }
+
+            for(hebra_count = 0; hebra_count < n_hebras; hebra_count++){
+                //A cada hebra se le pasa un subconjunto de la lista K.
+                ph[hebra_count].mutexBuffer = mutex_s;
+                ph[hebra_count].listas = listas;
+                ph[hebra_count].indice_corto = indice_corto;
+                ph[hebra_count].indice_a_revisar = indice_relativo;
+                ph[hebra_count].inicio = tamano_subconjunto * hebra_count;
+                ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
+                ph[hebra_count].interseccion = interseccion;
+                ph[hebra_count].mutex_interseccion = mutex_interseccion;
+                //printf("Inicio: %d, Fin: %d\n", ph[hebra_count].inicio, ph[hebra_count].fin);
+                pthread_create(&hebras[hebra_count], NULL, &hebra, &(ph[hebra_count]));
+            }
+
+
+            //Como minimo, hay que esperar a todas las hebras.
+            //Es la segunda condición para permitir la colaboración
+            for(i=0;i<n_hebras;i++){
+                pthread_join(hebras[i],NULL);
+            }
+            /*
+            //Mostrar intersección:
+            printf("Intersección: largo: %d, cursor: %d\n", interseccion -> largo , interseccion -> cursor);
+            for(i = 0; i < interseccion -> largo ; i++){
+                printf("%d ", (interseccion->dato)[i]);
+            }
+            printf("\n");
+            */
+            //Se debe cambiar la lista corta por la intersección.
+            listas[indice_corto].dato = interseccion -> dato;
+            listas[indice_corto].largo = interseccion -> largo;
+            listas[indice_corto].cursor = interseccion -> cursor;
+
+            free(interseccion);
+            free(hebras);
+            free(mutex_s);
+            free(mutex_interseccion);
+        }
+        listas_count++;
     }
-
-    for(hebra_count = 0; hebra_count < n_hebras; hebra_count++){
-        //A cada hebra se le pasa un subconjunto de la lista K.
-        ph[hebra_count].mutexBuffer = mutex_s;
-        ph[hebra_count].listas = listas;
-        ph[hebra_count].indice_corto = indice_corto;
-        ph[hebra_count].indice_a_revisar = indice_relativo;
-        ph[hebra_count].inicio = tamano_subconjunto * hebra_count;
-        ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
-        ph[hebra_count].interseccion = interseccion;
-        ph[hebra_count].mutex_interseccion = mutex_interseccion;
-        //printf("Inicio: %d, Fin: %d\n", ph[hebra_count].inicio, ph[hebra_count].fin);
-        pthread_create(&hebras[hebra_count], NULL, &hebra, &(ph[hebra_count]));
-    }
-
-
-    //Como mi   nimo, hay que esperar a todas las hebras.
-    //Es la segunda condición para permitir la colaboración
-    for(i=0;i<n_hebras;i++){
-        pthread_join(hebras[i],NULL);
-    }
-
-    //Mostrar intersección:
-    printf("Intersección: ");
-    for(i = 0; i < interseccion -> largo ; i++){
-        printf("%d ", (interseccion->dato)[i]);
-    }
-    printf("\n");
-
-
     pthread_exit(NULL);
 }
 
