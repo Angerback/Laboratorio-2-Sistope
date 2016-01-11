@@ -6,8 +6,28 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "lista.h"
+
+struct parametrosHebra {
+    pthread_mutex_t * mutexBuffer;
+    pthread_mutex_t * mutex_interseccion;
+    lista * listas;
+    lista * interseccion;
+    int indice_corto;
+    int indice_a_revisar;
+    int inicio;
+    int fin;
+}parametrosHebra;
+
+
+int equipos_abriendo_archivo; //Trabaja como semaforo contador
+int n_hebras;
+char * ruta;
+int n_listas;
+
+pthread_mutex_t archivo = PTHREAD_MUTEX_INITIALIZER;
 
 /*
     Función que abre y lee un archivo con el formato dado en el enunciado.
@@ -20,7 +40,8 @@ struct lista * abrir_archivo(char * ruta){
     char cursor;
     int i= 0;
     archivo = fopen(ruta, "r");
-    int largo_lista = 0, numero = 0, n_listas = 0;
+    int largo_lista = 0, numero = 0;
+    n_listas = 0;
     lista * retorno/* = (lista *) malloc(sizeof(struct lista))*/; //espacio para una lista
     if(archivo){
         cursor = getc(archivo);
@@ -111,10 +132,109 @@ struct lista * abrir_archivo(char * ruta){
     return retorno;
 }
 
+void *hebra(void * context){
+    struct parametrosHebra * ph = context;
+    lista * listas = ph -> listas;
+    lista * interseccion = ph -> interseccion;
+    int indice_corto = ph -> indice_corto;
+    int indice_a_revisar = ph -> indice_a_revisar;
+    pthread_mutex_t * mutexBuffer = ph -> mutexBuffer;
+    pthread_mutex_t * mutex_interseccion = ph -> mutex_interseccion;
+    int inicio = ph -> inicio;
+    int fin = ph -> fin;
+
+    printf("Hebra preparada\n");
+
+    //Ordenar el subconjunto local ascendentemente
+
+
+
+    pthread_exit(NULL);
+}
+
+/*
+    Funcion que provee un comportamiento para cada equipo
+    Se comporta como una hebra. Es una hebra.
+*/
+void *equipo(){
+    printf("Hola soy un equipo!\n");
+    lista * listas;
+    //Cada equipo abre el archivo por separado:
+    pthread_mutex_lock(&archivo);
+    //Se lee el archivo de texto, protegido
+    listas = abrir_archivo(ruta);
+    pthread_mutex_unlock(&archivo);
+    //Se debe buscar la lista más corta en el arreglo.
+    int indice_corto = 0, i;
+    for (i = 0; i < n_listas; i++) {
+        if(listas[i].largo < listas[indice_corto].largo){
+            indice_corto = i;
+        }
+    }
+    //printf("Indice Corto: %d\n", indice_corto);
+    //Conociendo la lista mas corta, se puede comenzar a intersectar.
+    /*
+    A cada hebra se le debe entregar un subconjunto de la siguiente lista a revisar
+    K, es decir se le entregará k, que es una sublista de K (k e K).
+    Además, cada hebra debe tener acceso a la lista más corta, y solo debe
+    bloquearla cada vez que va a a leer un elemento para proveer concurrencia.
+    */
+    // Luego de que cada equipo ha leido el archivo de texto, se puede competir:
+    // Cada equipo debe inicializar a sus hebras participantes:
+    pthread_t *hebras = ( pthread_t * ) malloc ( sizeof( pthread_t ) * n_hebras );
+
+    //Se inicializan los semaforos para cada elemento de la lista más corta:
+    //Un semaforo por elemento (se bloquea la lista de a un elemento)
+    pthread_mutex_t * mutex_s = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) * listas[indice_corto].largo);
+    int lista_actual = 0;
+    int hebra_count;
+    int inicio_subconjunto = 0;
+    int tamano_subconjunto = listas[lista_actual].largo / n_hebras;
+    int indice_relativo = 0;
+    struct parametrosHebra ph[n_hebras];
+
+    printf("asdf\n");
+    lista * interseccion = crear_lista(1);
+
+    // Se inicializan los semaforos
+    /* hay problemas aqui */
+    pthread_mutex_t * mutex_interseccion;
+    *mutex_interseccion = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    int semaforos = 0;
+    for (semaforos = 0; semaforos < listas[indice_corto].largo; semaforos++) {
+        mutex_s[semaforos] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    }
+
+    for(hebra_count = 0; hebra_count < n_hebras; hebra_count++){
+        //A cada hebra se le pasa un subconjunto de la lista K.
+        ph[hebra_count].mutexBuffer = mutex_s;
+        ph[hebra_count].listas = listas;
+        ph[hebra_count].indice_corto = indice_corto;
+        ph[hebra_count].indice_a_revisar = indice_relativo;
+        ph[hebra_count].inicio = tamano_subconjunto * hebra_count;
+        ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
+        ph[hebra_count].interseccion = interseccion;
+        ph[hebra_count].mutex_interseccion = mutex_interseccion;
+
+        pthread_create(&hebras[hebra_count], NULL, &hebra, &ph);
+    }
+
+
+    //Como minimo, hay que esperar a todas las hebras.
+    //Es la segunda condición para permitir la colaboración
+    for(i=0;i<n_hebras;i++){
+        pthread_join(hebras[i],NULL);
+    }
+
+
+    pthread_exit(NULL);
+}
+
 int main(int argc, char * argv[]){
 
-    int n_equipos = 0, n_hebras = 0;
-    char * ruta = 0; //Relativa
+    int n_equipos = 0;
+    n_hebras = 0;
+    ruta = 0; //Relativa
 
     int arg_index = 1;
 
@@ -134,10 +254,9 @@ int main(int argc, char * argv[]){
     }
     printf("Equipos: %d, Hebras: %d, Ruta: %s\n", n_equipos, n_hebras, ruta);
 
-    // Luego de que se tienen los parametros, se debe buscar el archivo en
-    // memoria y obtener las listas.
-
-    lista * listas = abrir_archivo(ruta);
+    if(n_equipos < 0 || n_hebras < 0 || ruta <= 0){
+        return 1;
+    }
 
     /*
     //Debería ser capaz de imprimirlas:
@@ -153,6 +272,24 @@ int main(int argc, char * argv[]){
         printf("\n");
     }
     */
-    
+    //Luego de tener las listas, se puede inicar la competencia.
+
+
+    equipos_abriendo_archivo = n_equipos;
+    pthread_t *equipos = ( pthread_t * ) malloc ( sizeof( pthread_t ) * n_equipos );
+
+    int hebra_count;
+    for(hebra_count=0; hebra_count < n_equipos; hebra_count++){
+        pthread_create(&equipos[hebra_count], NULL, &equipo, NULL);
+    }
+
+
+    //Como minimo, hay que esperar a todas las hebras.
+    //Es la segunda condición para permitir la colaboración
+    int i;
+    for(i = 0; i < n_equipos ; i++){
+        pthread_join(equipos[i], NULL);
+    }
+
     return 0;
 }
