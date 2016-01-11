@@ -39,13 +39,17 @@ struct lista * abrir_archivo(char * ruta){
     char * buffer;
     char cursor;
     int i= 0;
+    //printf("Archivo abierto.\n");
     archivo = fopen(ruta, "r");
     int largo_lista = 0, numero = 0;
     n_listas = 0;
     lista * retorno/* = (lista *) malloc(sizeof(struct lista))*/; //espacio para una lista
     if(archivo){
+        //printf("Archivo abierto.\n");
         cursor = getc(archivo);
         while(cursor != EOF){
+            i = 0;
+            //printf("Lista\n");
             n_listas++;
             if(n_listas == 1){
                 retorno = (lista *) malloc(sizeof(struct lista));
@@ -82,6 +86,7 @@ struct lista * abrir_archivo(char * ruta){
                 buffer = (char *) malloc(sizeof(char));
                 while(cursor!=' '){
                     if(cursor == '\n'){
+                        //printf("Salto de linea \n");
                         break;
                     }
                     buffer[i] = cursor;
@@ -106,6 +111,7 @@ struct lista * abrir_archivo(char * ruta){
                 //printf("Esto no debe aparecer luego de un salto de linea\n");
                 cursor = getc(archivo);
             }
+            //printf("Holi\n");
             /*
             printf("asfdf\n");
             int k = 0;
@@ -115,10 +121,12 @@ struct lista * abrir_archivo(char * ruta){
             printf("\n");
             */
             cursor = getc(archivo);
+            //printf("cursor: %c\n", cursor);
             retorno[n_listas-1].dato = list->dato;
             retorno[n_listas-1].largo = list->largo;
             retorno[n_listas-1].cursor = list->cursor;
         }
+        printf("Terminando\n");
     }
     /*
     i = 0;
@@ -145,7 +153,57 @@ void *hebra(void * context){
 
     printf("Hebra preparada\n");
 
-    //Ordenar el subconjunto local ascendentemente
+    // Con cada hebra preparada, se ejecuta el algoritmo solicitado:
+    int i = 0;
+    /*
+    Por cada elemento de S (recorrido secuencial O(S)), hacer búsqueda binaria
+    en los elementos de K que pueda visualizar la hebra (búsqueda binaria O ((K/P) log
+    (K/P)).
+    */
+    for(i = 0; i < listas[indice_corto].largo; i++){
+        //Se bloquea el elemento puntual que se desea mirar
+        int elemento_s;
+        pthread_mutex_lock(&(mutexBuffer[i]));
+            // se saca una copia del elemento para no limitar la concurrencia
+            elemento_s = listas[indice_corto].dato[i];
+        pthread_mutex_unlock(&(mutexBuffer[i]));
+        //Realizar busqueda binaria en el segmento visible de K.
+        int piso = inicio, cielo = fin, pivote, encontrado = 0;
+        //printf("(Hebra) Inicio: %d, Fin: %d, piso: %d, cielo: %d\n",inicio, fin, piso, cielo);
+        while((piso <= cielo) && (!encontrado)){
+            pivote = (piso + cielo) / 2;
+            if(elemento_s == listas[indice_a_revisar].dato[pivote]){
+                encontrado = 1;
+            }
+            else if(elemento_s < listas[indice_a_revisar].dato[pivote]){
+                cielo = pivote - 1;
+            }else{
+                piso = pivote + 1;
+            }
+        }
+
+        if(encontrado){
+            printf("Elemento intersecto: %d\n", elemento_s);
+            /* Si se encontró el documento revisado en la lista K,
+            entonces agregar elelemento a S’ (bloqueando la lista S’
+            para acceso exclusivo).
+            */
+            pthread_mutex_lock(mutex_interseccion);
+                //agregar
+                if((interseccion -> largo) == 1){
+                    //Se agrega el primer elemento.
+                    //(interseccion -> dato)[0] = elemento_s;
+                    add_lista(interseccion, elemento_s);
+                }else{
+                    // Se debe agrandar la lista.
+                    printf("Agrandar------------------\n");
+                    agrandar_lista(interseccion, (interseccion->largo)+1);
+                    add_lista(interseccion, elemento_s);
+                }
+            pthread_mutex_unlock(mutex_interseccion);
+        }
+
+    }
 
 
 
@@ -161,16 +219,18 @@ void *equipo(){
     lista * listas;
     //Cada equipo abre el archivo por separado:
     pthread_mutex_lock(&archivo);
-    //Se lee el archivo de texto, protegido
-    listas = abrir_archivo(ruta);
+        //Se lee el archivo de texto, protegido
+        listas = abrir_archivo(ruta);
     pthread_mutex_unlock(&archivo);
     //Se debe buscar la lista más corta en el arreglo.
+    //printf("0\n");
     int indice_corto = 0, i;
     for (i = 0; i < n_listas; i++) {
         if(listas[i].largo < listas[indice_corto].largo){
             indice_corto = i;
         }
     }
+    //printf("1\n");
     //printf("Indice Corto: %d\n", indice_corto);
     //Conociendo la lista mas corta, se puede comenzar a intersectar.
     /*
@@ -193,16 +253,22 @@ void *equipo(){
     int indice_relativo = 0;
     struct parametrosHebra ph[n_hebras];
 
-    printf("asdf\n");
+    printf("2\n");
+    // Intersección es S'
     lista * interseccion = crear_lista(1);
 
     // Se inicializan los semaforos
-    /* hay problemas aqui */
-    pthread_mutex_t * mutex_interseccion;
-    *mutex_interseccion = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    // hay problemas aqui
+    // Se crea mutex para proteger la lista de intersección S' contra escritura
+    pthread_mutex_t * mutex_interseccion = (pthread_mutex_t * ) malloc(sizeof(pthread_mutex_t) );
+    //* mutex_interseccion = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_init(mutex_interseccion, NULL);
     int semaforos = 0;
     for (semaforos = 0; semaforos < listas[indice_corto].largo; semaforos++) {
-        mutex_s[semaforos] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+        //mutex_s[semaforos] = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+        //Se inicializan los semaforos para proteger cada elemento de S
+        //Nunca se necesitarán más que la cantidad inicial.
+        pthread_mutex_init(&(mutex_s[semaforos]), NULL);
     }
 
     for(hebra_count = 0; hebra_count < n_hebras; hebra_count++){
@@ -215,16 +281,23 @@ void *equipo(){
         ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
         ph[hebra_count].interseccion = interseccion;
         ph[hebra_count].mutex_interseccion = mutex_interseccion;
-
-        pthread_create(&hebras[hebra_count], NULL, &hebra, &ph);
+        //printf("Inicio: %d, Fin: %d\n", ph[hebra_count].inicio, ph[hebra_count].fin);
+        pthread_create(&hebras[hebra_count], NULL, &hebra, &(ph[hebra_count]));
     }
 
 
-    //Como minimo, hay que esperar a todas las hebras.
+    //Como mi   nimo, hay que esperar a todas las hebras.
     //Es la segunda condición para permitir la colaboración
     for(i=0;i<n_hebras;i++){
         pthread_join(hebras[i],NULL);
     }
+
+    //Mostrar intersección:
+    printf("Intersección: ");
+    for(i = 0; i < interseccion -> largo ; i++){
+        printf("%d ", (interseccion->dato)[i]);
+    }
+    printf("\n");
 
 
     pthread_exit(NULL);
