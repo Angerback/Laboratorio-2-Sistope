@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "lista.h"
 
@@ -19,8 +20,12 @@ struct parametrosHebra {
     int indice_a_revisar;
     int inicio;
     int fin;
+    long double * contador_tiempo;
 }parametrosHebra;
 
+struct parametrosGrupo {
+	int indice;
+}parametrosGrupo;
 
 int equipos_abriendo_archivo; //Trabaja como semaforo contador
 int n_hebras;
@@ -85,6 +90,13 @@ struct lista * abrir_archivo(char * ruta){
                 free(buffer);
                 buffer = (char *) malloc(sizeof(char));
                 while(cursor!=' '){
+                    /*
+                        En este punto puede ocurrir un bloqueo ya que el programa
+                        espera un salto de linea para terminar la ejecucion.
+                        Para evitarlo, el archivo debe estar finalizado en la
+                        ultima lista con un salto de linea, para crear una linea
+                        vacia al final del documento.
+                    */
                     if(cursor == '\n'){
                         //printf("Salto de linea \n");
                         break;
@@ -99,7 +111,7 @@ struct lista * abrir_archivo(char * ruta){
 
                 // Luego de que se tiene un numero, se pasa a int y se agrega a la lista
                 int num = atoi(buffer);
-                //printf("- Elemento de la lista: %d\n", num);
+               // printf("- Elemento de la lista: %d\n", num);
                 add_lista(list, num);
                 // se itera para todos los numeros.
 
@@ -110,6 +122,7 @@ struct lista * abrir_archivo(char * ruta){
                 }
                 //printf("Esto no debe aparecer luego de un salto de linea\n");
                 cursor = getc(archivo);
+                //printf("Caracter leido (final del while): %c\n", cursor);
             }
             //printf("Holi\n");
             /*
@@ -126,7 +139,7 @@ struct lista * abrir_archivo(char * ruta){
             retorno[n_listas-1].largo = list->largo;
             retorno[n_listas-1].cursor = list->cursor;
         }
-        printf("Terminando\n");
+        //printf("Terminando\n");
     }
     /*
     i = 0;
@@ -137,6 +150,7 @@ struct lista * abrir_archivo(char * ruta){
             printf("Elemento de lista: %d\n", (retorno[i].dato)[j]);
         }
     }*/
+    fclose(archivo);
     return retorno;
 }
 
@@ -150,8 +164,12 @@ void *hebra(void * context){
     pthread_mutex_t * mutex_interseccion = ph -> mutex_interseccion;
     int inicio = ph -> inicio;
     int fin = ph -> fin;
+    
+    clock_t start, end;
+    long double cpu_time_used;
+	start = clock();
 
-    printf("Hebra preparada\n");
+    //printf("Hebra preparada\n");
 
     // Con cada hebra preparada, se ejecuta el algoritmo solicitado:
     int i = 0;
@@ -189,25 +207,20 @@ void *hebra(void * context){
             para acceso exclusivo).
             */
             pthread_mutex_lock(mutex_interseccion);
-                //agregar
-                //if((interseccion -> largo) == 1){
-
-                    //Se agrega el primer elemento.
-                    //(interseccion -> dato)[0] = elemento_s;
-                    add_lista(interseccion, elemento_s);
-                /*}else{
-                    // Se debe agrandar la lista.
-                    printf("Agrandar------------------\n");
-                    agrandar_lista(interseccion, (interseccion->largo)+1);
-                    add_lista(interseccion, elemento_s);
-                }*/
+                
+                add_lista(interseccion, elemento_s);
+                
             pthread_mutex_unlock(mutex_interseccion);
         }
 
     }
 
 
-
+    end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC; //medido en segundos
+    ph->contador_tiempo = (long double*) malloc(sizeof(long double));
+    *(ph->contador_tiempo) = cpu_time_used;
+    
     pthread_exit(NULL);
 }
 
@@ -215,8 +228,10 @@ void *hebra(void * context){
     Funcion que provee un comportamiento para cada equipo
     Se comporta como una hebra. Es una hebra.
 */
-void *equipo(){
+void *equipo(void * context){
     printf("Hola soy un equipo!\n");
+	struct parametrosGrupo * pg = context;
+	int indice_grupo = pg->indice;
     lista * listas;
     //Cada equipo abre el archivo por separado:
     pthread_mutex_lock(&archivo);
@@ -233,6 +248,9 @@ void *equipo(){
     }
     int listas_count = 0;
 
+	clock_t start, end;
+    double cpu_time_used;
+	start = clock();
     while(listas_count < n_listas){
         if(listas_count != indice_corto){
             printf("Lista corta: largo: %d, cursor: %d\n", listas[indice_corto].largo , listas[indice_corto].cursor);
@@ -288,7 +306,21 @@ void *equipo(){
                 ph[hebra_count].indice_corto = indice_corto;
                 ph[hebra_count].indice_a_revisar = indice_relativo;
                 ph[hebra_count].inicio = tamano_subconjunto * hebra_count;
-                ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
+                
+                //Probar en caso de que sobren elementos en la lista
+                //Funciona
+                
+                if(hebra_count == n_hebras - 1){
+                    int test = ph[hebra_count].inicio + tamano_subconjunto - 1;
+                    if(test < listas[indice_relativo].largo - 1){
+                        ph[hebra_count].fin = listas[indice_relativo].largo - 1;
+                    }else{
+                        ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
+                    }
+                }else{
+                    ph[hebra_count].fin = ph[hebra_count].inicio + tamano_subconjunto - 1;
+                }
+                
                 ph[hebra_count].interseccion = interseccion;
                 ph[hebra_count].mutex_interseccion = mutex_interseccion;
                 //printf("Inicio: %d, Fin: %d\n", ph[hebra_count].inicio, ph[hebra_count].fin);
@@ -300,20 +332,21 @@ void *equipo(){
             //Es la segunda condición para permitir la colaboración
             for(i=0;i<n_hebras;i++){
                 pthread_join(hebras[i],NULL);
+                printf("La hebra %d tardo %Lf\n", i, *(ph[i].contador_tiempo));
             }
-            /*
+            
             //Mostrar intersección:
             printf("Intersección: largo: %d, cursor: %d\n", interseccion -> largo , interseccion -> cursor);
             for(i = 0; i < interseccion -> largo ; i++){
                 printf("%d ", (interseccion->dato)[i]);
             }
             printf("\n");
-            */
+            
             //Se debe cambiar la lista corta por la intersección.
             listas[indice_corto].dato = interseccion -> dato;
             listas[indice_corto].largo = interseccion -> largo;
             listas[indice_corto].cursor = interseccion -> cursor;
-
+            
             free(interseccion);
             free(hebras);
             free(mutex_s);
@@ -321,8 +354,15 @@ void *equipo(){
         }
         listas_count++;
     }
+    
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC; //medido en segundos
+    
+	//printf("El grupo %d tardó %f segundos en ejecutarse\n", indice_grupo , cpu_time_used);
     pthread_exit(NULL);
+    
 }
+
 
 int main(int argc, char * argv[]){
 
@@ -373,8 +413,10 @@ int main(int argc, char * argv[]){
     pthread_t *equipos = ( pthread_t * ) malloc ( sizeof( pthread_t ) * n_equipos );
 
     int hebra_count;
+	struct parametrosGrupo pg[n_equipos];
     for(hebra_count=0; hebra_count < n_equipos; hebra_count++){
-        pthread_create(&equipos[hebra_count], NULL, &equipo, NULL);
+		pg[hebra_count].indice = hebra_count;
+        pthread_create(&equipos[hebra_count], NULL, &equipo, &(pg[hebra_count]));
     }
 
 
@@ -384,6 +426,16 @@ int main(int argc, char * argv[]){
     for(i = 0; i < n_equipos ; i++){
         pthread_join(equipos[i], NULL);
     }
+    
+    free(equipos);
+    
+    
+    /*
+    //Imprimir resultados
+    FILE * resultado;
+    fp = fopen("resultado.txt", "w+");
+    */
+    
 
     return 0;
 }
