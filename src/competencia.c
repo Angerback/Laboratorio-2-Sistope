@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include "lista.h"
+#include "lista_double.h"
 
 struct parametrosHebra {
     pthread_mutex_t * mutexBuffer;
@@ -25,6 +26,9 @@ struct parametrosHebra {
 
 struct parametrosGrupo {
 	int indice;
+    long double * contador_tiempo;
+    long double * tiempos_hebras;
+    struct lista * interseccion;
 }parametrosGrupo;
 
 int equipos_abriendo_archivo; //Trabaja como semaforo contador
@@ -247,10 +251,24 @@ void *equipo(void * context){
         }
     }
     int listas_count = 0;
+    int numero_ejecuciones = 0;
+    
+    /*
+    pg->tiempos_hebras = (struct lista_d *)malloc(sizeof(struct lista_d) * n_hebras);
+    for(i = 0; i<n_hebras; i++){
+        (pg->tiempos_hebras)[i] = *(crear_lista_d(1));
+    }*/
 
 	clock_t start, end;
-    double cpu_time_used;
+    long double cpu_time_used;
 	start = clock();
+    
+    pg -> tiempos_hebras = (long double *) malloc(sizeof(long double) * n_hebras);
+    for(i = 0; i < n_hebras; i++){
+        (pg -> tiempos_hebras)[i] = 0.0;
+    }
+    
+    
     while(listas_count < n_listas){
         if(listas_count != indice_corto){
             printf("Lista corta: largo: %d, cursor: %d\n", listas[indice_corto].largo , listas[indice_corto].cursor);
@@ -333,6 +351,16 @@ void *equipo(void * context){
             for(i=0;i<n_hebras;i++){
                 pthread_join(hebras[i],NULL);
                 printf("La hebra %d tardo %Lf\n", i, *(ph[i].contador_tiempo));
+                
+                if(numero_ejecuciones == 0){
+                    (pg->tiempos_hebras)[i] = *(ph[i].contador_tiempo);
+                }else{
+                    if(*(ph[i].contador_tiempo) < (pg->tiempos_hebras)[i]){
+                        (pg->tiempos_hebras)[i] = *(ph[i].contador_tiempo);
+                    }
+                }
+                
+                //add_lista_d(&((pg->tiempos_hebras)[i]), *(ph[i].contador_tiempo));
             }
             
             //Mostrar intersección:
@@ -351,14 +379,35 @@ void *equipo(void * context){
             free(hebras);
             free(mutex_s);
             free(mutex_interseccion);
+            numero_ejecuciones++;
         }
         listas_count++;
     }
     
 	end = clock();
-	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC; //medido en segundos
+	cpu_time_used = ((long double) (end - start)) / CLOCKS_PER_SEC; //medido en segundos
+    pg->contador_tiempo = (long double*) malloc(sizeof(long double));
+    *(pg->contador_tiempo) = cpu_time_used;
+	printf("El grupo %d tardó %f segundos en ejecutarse\n", indice_grupo , cpu_time_used);
+    /*
+    for(i = 0; i<n_hebras;i++){
+        double promedio;
+        double acumulador = 0.0;
+        int k = 0;
+        for(k=0; k< ((pg->tiempos_hebras)[i]).largo; k++){
+            acumulador = acumulador + ((pg->tiempos_hebras)[i]).dato[k];
+        }
+        
+        promedio = acumulador/((pg->tiempos_hebras)[i]).largo;
+        
+        printf("Tiempo tomado por hebra %d: %Lf\n",i , promedio);
+    }
+    */
+    (pg->interseccion) = (struct lista *) (malloc(sizeof(struct lista)));
+    (pg->interseccion) -> dato = listas[indice_corto].dato;
+    (pg->interseccion) -> largo = listas[indice_corto].largo;
+    (pg->interseccion) -> cursor = listas[indice_corto].cursor;
     
-	//printf("El grupo %d tardó %f segundos en ejecutarse\n", indice_grupo , cpu_time_used);
     pthread_exit(NULL);
     
 }
@@ -422,19 +471,105 @@ int main(int argc, char * argv[]){
 
     //Como minimo, hay que esperar a todas las hebras.
     //Es la segunda condición para permitir la colaboración
-    int i;
+    int i, j;
     for(i = 0; i < n_equipos ; i++){
         pthread_join(equipos[i], NULL);
     }
     
-    free(equipos);
     
+    //free(equipos);
+    
+    int indice_primero = 0;
+    int indice_segundo;
+    
+    int indice_tercero;
     
     /*
-    //Imprimir resultados
-    FILE * resultado;
-    fp = fopen("resultado.txt", "w+");
+    // Buscar el primer, segundo y tercer lugar de los grupos que menos tardaron
+    for(i = 0; i < n_equipos ; i++){
+        printf("Contador tiempo: %Lf\n", *(pg[i].contador_tiempo));
+    }
     */
+    
+    
+    
+    for(i = 0; i < n_equipos ; i++){
+        if(*(pg[i].contador_tiempo) < *(pg[indice_primero].contador_tiempo)){
+            indice_primero = i;
+        }
+    }
+    
+    for(i = 0; i < n_equipos; i++){
+        if(i != indice_primero){
+            indice_segundo = i;
+        }
+    }
+    
+    for(i = 0; i < n_equipos ; i++){
+        if((*(pg[i].contador_tiempo) < *(pg[indice_segundo].contador_tiempo)) && (i != indice_primero)){
+            indice_segundo = i;
+        }
+    }
+    
+    for(i = 0; i < n_equipos; i++){
+        if(i != indice_segundo && i != indice_primero){
+            indice_tercero = i;
+        }
+    }
+    
+    for(i = 0; i < n_equipos ; i++){
+        if((*(pg[i].contador_tiempo) < *(pg[indice_tercero].contador_tiempo)) && (i != indice_primero) && (i != indice_segundo)){
+            indice_tercero = i;
+        }
+    }
+    lista * interseccion;
+    /*
+    printf("Tiempos grupo 1\n");
+    for(i = 0; i < n_hebras ; i++){
+        printf("%Lf     ", (pg[indice_primero].tiempos_hebras)[i]);
+    }
+    printf("\n");
+    */
+    
+    //Imprimir resultados
+    
+    int mejor_hebra = 0;
+    int grupo_hebra = 0;
+    for(i = 0; i < n_equipos; i++){
+        for(j = 0; j < n_hebras; j++){
+            if((pg[i].tiempos_hebras)[j] < (pg[grupo_hebra].tiempos_hebras)[mejor_hebra]) {
+                mejor_hebra = j;
+                grupo_hebra = i;
+            }
+        }
+    }
+    
+    
+    FILE * resultado;
+    resultado = fopen("resultado.txt", "w+");
+    
+    fprintf(resultado, "Número del equipo que obtuvo el primer lugar: %d\n", indice_primero);
+    fprintf(resultado, "Tiempo del equipo que obtuvo el primer lugar: %Lf\n", *(pg[indice_primero].contador_tiempo));
+    
+    fprintf(resultado, "Número del equipo que obtuvo el segundo lugar: %d\n", indice_segundo);
+    fprintf(resultado, "Tiempo del equipo que obtuvo el segundo lugar: %Lf\n", *(pg[indice_segundo].contador_tiempo));
+    
+    fprintf(resultado, "Número del equipo que obtuvo el tercero lugar: %d\n", indice_tercero);
+    fprintf(resultado, "Tiempo del equipo que obtuvo el tercero lugar: %Lf\n", *(pg[indice_tercero].contador_tiempo));
+    
+    fprintf(resultado, "Hebra más eficiente: %d, Grupo: %d\n", mejor_hebra, grupo_hebra);
+    
+    fprintf(resultado, "Hebra más eficiente en promedio: %d, Grupo: %d\n", mejor_hebra, grupo_hebra);
+    
+    interseccion = pg[indice_primero].interseccion;
+    
+    fprintf(resultado, "Intersección de las listas: ");
+    for(i = 0; i < interseccion -> largo ; i++){
+        fprintf(resultado, "%d ", (interseccion->dato)[i]);
+    }
+    fprintf(resultado, "\n");
+    
+    fclose(resultado);
     
 
     return 0;
