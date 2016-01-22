@@ -27,7 +27,7 @@ make
 cd ./build
 ```
 
-* Colocar un archivo de listan esta carpeta, conforme al formato especificado en el enunciado.
+* Colocar un archivo de lista en esta carpeta, conforme al formato especificado en el enunciado.
 * Ejecutar el archivo "competencia":
 
 
