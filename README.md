@@ -4,7 +4,7 @@
 
 * Laboratorio escrito en C para realizar competencia entre equipos de hebras que intersectan listas de numeros.
 * Version 1.0
-* [Pthread](https://computing.llnl.gov/tutorials/pthreads/)
+* Este programa usa [Pthread](https://computing.llnl.gov/tutorials/pthreads/)
 * Autores: Sebastián Meneses y Matías Calderon
 
 ### Instrucciones ###
