@@ -47,7 +47,7 @@ Si desea ejecutar otro comando, variando el numero de equipos o hebras, siga el 
 ./competencia -g NG -h NH -i Ruta
 ```
 
-donde:
+donde:\n
       NG: número de grupos 
       NH: número de hebras por grupo
       Ruta: ruta relativa del archivo .dat 
