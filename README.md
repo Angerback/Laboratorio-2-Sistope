@@ -40,3 +40,9 @@ cd ./build
 El comando anterior ejecutará el programa con 4 equipos de 4 hebras para el archivo "lista.dat"
 
 ### Detalles encontrados ###
+
+1- Si el archivo .dat no contiene un salto de linea final, el programa se queda pegado en un bucle while en la linea 92.
+
+2- numero de hebras no puede ser mayor al tamaño de la lista mas corta. devuelve como respuesta una intersección vacia.
+
+3- si en el archivo .dat no se encuentran numero para interceptar, genera una lista vacía.
