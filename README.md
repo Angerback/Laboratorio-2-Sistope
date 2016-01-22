@@ -39,6 +39,20 @@ cd ./build
 
 El comando anterior ejecutará el programa con 4 equipos de 4 hebras para el archivo "lista.dat"
 
+Si desea ejecutar otro comando, variando el numero de equipos o hebras, siga el siguiente esquema:
+
+```
+#!bash
+
+./competencia -g NG -h NH -i Ruta
+```
+
+donde:
+      NG: número de grupos 
+      NH: número de hebras por grupo
+      Ruta: ruta relativa del archivo .dat 
+
+
 ### Detalles encontrados ###
 
 1- Si el archivo .dat no contiene un salto de linea final, el programa se queda pegado en un bucle while en la linea 92.
