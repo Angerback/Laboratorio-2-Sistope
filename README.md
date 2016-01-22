@@ -58,6 +58,6 @@ donde:
 
 1- Si el archivo .dat no contiene un salto de linea final, el programa se queda pegado en un bucle while en la linea 92.
 
-2- numero de hebras no puede ser mayor al tamaño de la lista mas corta. devuelve como respuesta una intersección vacia.
+2- Número de hebras no puede ser mayor al tamaño de la lista mas corta, de lo contrario, el programa devuelve como respuesta una intersección vacía.
 
-3- si en el archivo .dat no se encuentran numero para interceptar, genera una lista vacía.
+3- Si en el archivo .dat no se encuentra un número para interceptar, genera una lista vacía.
