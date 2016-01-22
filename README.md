@@ -38,3 +38,5 @@ cd ./build
 ```
 
 El comando anterior ejecutará el programa con 4 equipos de 4 hebras para el archivo "lista.dat"
+
+### Detalles encontrados ###
